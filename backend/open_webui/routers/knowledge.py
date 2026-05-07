@@ -18,7 +18,8 @@ from open_webui.models.knowledge import (
     KnowledgeResponse,
     KnowledgeUserResponse,
 )
-from open_webui.models.files import Files, FileModel, FileMetadataResponse
+from open_webui.models.files import Files, FileForm, FileModel, FileMetadataResponse
+from open_webui.models.notes import Notes
 from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from open_webui.routers.retrieval import (
     process_file,
@@ -684,6 +685,137 @@ async def add_file_to_knowledge_by_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
+
+
+############################
+# AddNoteToKnowledge
+############################
+
+
+class KnowledgeNoteIdForm(BaseModel):
+    note_id: str
+
+
+@router.post('/{id}/note/add', response_model=Optional[KnowledgeFilesResponse])
+async def add_note_to_knowledge_by_id(
+    request: Request,
+    id: str,
+    form_data: KnowledgeNoteIdForm,
+    user=Depends(get_verified_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    knowledge = await Knowledges.get_knowledge_by_id(id=id, db=db)
+    if not knowledge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.NOT_FOUND,
+        )
+
+    if (
+        knowledge.user_id != user.id
+        and not await AccessGrants.has_access(
+            user_id=user.id,
+            resource_type='knowledge',
+            resource_id=knowledge.id,
+            permission='write',
+            db=db,
+        )
+        and user.role != 'admin'
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+    note = await Notes.get_note_by_id(form_data.note_id, db=db)
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ERROR_MESSAGES.NOT_FOUND,
+        )
+
+    if user.role != 'admin' and (
+        user.id != note.user_id
+        and not await AccessGrants.has_access(
+            user_id=user.id,
+            resource_type='note',
+            resource_id=note.id,
+            permission='read',
+            db=db,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+    note_content = (note.data or {}).get('content', {}).get('md', '') or ''
+    if not note_content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Note has no content'),
+        )
+
+    existing_files = await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db)
+    for existing in existing_files:
+        if (existing.meta or {}).get('note_id') == note.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT('Note is already in this knowledge collection'),
+            )
+
+    import uuid as _uuid
+
+    file_id = str(_uuid.uuid4())
+    filename = f'{(note.title or "Untitled").strip() or "Untitled"}.md'
+
+    file_item = await Files.insert_new_file(
+        user.id,
+        FileForm(
+            **{
+                'id': file_id,
+                'filename': filename,
+                'path': '',
+                'data': {'content': note_content},
+                'meta': {
+                    'name': filename,
+                    'content_type': 'text/markdown',
+                    'size': len(note_content.encode('utf-8')),
+                    'source': 'note',
+                    'note_id': note.id,
+                },
+            }
+        ),
+        db=db,
+    )
+    if not file_item:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Failed to create file from note'),
+        )
+
+    try:
+        await process_file(
+            request,
+            ProcessFileForm(file_id=file_item.id, collection_name=id),
+            user=user,
+            db=db,
+        )
+
+        await Knowledges.add_file_to_knowledge_by_id(
+            knowledge_id=id, file_id=file_item.id, user_id=user.id, db=db
+        )
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    return KnowledgeFilesResponse(
+        **knowledge.model_dump(),
+        files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
+    )
 
 
 @router.post('/{id}/file/update', response_model=Optional[KnowledgeFilesResponse])
