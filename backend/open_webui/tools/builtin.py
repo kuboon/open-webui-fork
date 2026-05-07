@@ -2315,6 +2315,61 @@ async def query_knowledge_bases(
         return json.dumps({'error': str(e)})
 
 
+async def add_note_to_knowledge(
+    note_id: str,
+    knowledge_id: str,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Add an existing note's content as a file in a knowledge collection so it
+    becomes searchable in that collection's vector index.
+
+    :param note_id: The id of the note to add
+    :param knowledge_id: The id of the knowledge collection (KB) to add it to
+    :return: JSON with status, knowledge_id, file_id, and filename
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.internal.db import get_async_db
+        from open_webui.routers.knowledge import (
+            add_note_to_knowledge_by_id,
+            KnowledgeNoteIdForm,
+        )
+
+        user = UserModel(**__user__)
+
+        async with get_async_db() as db:
+            result = await add_note_to_knowledge_by_id(
+                request=__request__,
+                id=knowledge_id,
+                form_data=KnowledgeNoteIdForm(note_id=note_id),
+                user=user,
+                db=db,
+            )
+
+        files = result.files if result else []
+        added = next((f for f in files if (f.meta or {}).get('note_id') == note_id), None)
+        return json.dumps(
+            {
+                'status': 'success',
+                'knowledge_id': knowledge_id,
+                'note_id': note_id,
+                'file_id': added.id if added else None,
+                'filename': added.filename if added else None,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'add_note_to_knowledge error: {e}')
+        return json.dumps({'error': str(e)})
+
+
 # =============================================================================
 # SKILLS TOOLS
 # =============================================================================

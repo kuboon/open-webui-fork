@@ -87,6 +87,7 @@
 	import FilesOverlay from '../chat/MessageInput/FilesOverlay.svelte';
 	import RecordMenu from './RecordMenu.svelte';
 	import NoteMenu from './Notes/NoteMenu.svelte';
+	import AddToKnowledgeModal from './Notes/AddToKnowledgeModal.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import Sparkles from '../icons/Sparkles.svelte';
 	import SparklesSolid from '../icons/SparklesSolid.svelte';
@@ -149,6 +150,7 @@
 
 	let showDeleteConfirm = false;
 	let showAccessControlModal = false;
+	let showAddToKnowledgeModal = false;
 
 	let ignoreBlur = false;
 	let titleInputFocused = false;
@@ -906,6 +908,10 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 	</div>
 </DeleteConfirmDialog>
 
+{#if note?.id}
+	<AddToKnowledgeModal bind:show={showAddToKnowledgeModal} noteId={note.id} />
+{/if}
+
 <PaneGroup direction="horizontal" class="w-full h-full">
 	<Pane defaultSize={70} minSize={30} class="h-full flex flex-col w-full relative">
 		<div class="relative flex-1 w-full h-full flex justify-center pt-[11px]" id="note-editor">
@@ -1098,6 +1104,11 @@ Provide the enhanced notes in markdown format. Use markdown syntax for headings,
 										note = await getNoteById(localStorage.token, note.id);
 										pinnedNotes.set(await getPinnedNoteList(localStorage.token).catch(() => []));
 									}}
+									onAddToKnowledge={note?.id
+										? () => {
+												showAddToKnowledgeModal = true;
+											}
+										: null}
 								>
 									<div class="p-1 bg-transparent hover:bg-white/5 transition rounded-lg">
 										<EllipsisHorizontal className="size-5" />

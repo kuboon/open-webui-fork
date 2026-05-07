@@ -51,6 +51,7 @@
 	import Spinner from '../common/Spinner.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import NoteMenu from './Notes/NoteMenu.svelte';
+	import AddToKnowledgeModal from './Notes/AddToKnowledgeModal.svelte';
 	import FilesOverlay from '../chat/MessageInput/FilesOverlay.svelte';
 	import XMark from '../icons/XMark.svelte';
 	import DropdownOptions from '../common/DropdownOptions.svelte';
@@ -61,6 +62,7 @@
 	let importFiles = '';
 	let selectedNote = null;
 	let showDeleteConfirm = false;
+	let showAddToKnowledgeModal = false;
 
 	let notes = {};
 
@@ -338,6 +340,13 @@
 			</div>
 		</DeleteConfirmDialog>
 
+		{#if selectedNote}
+			<AddToKnowledgeModal
+				bind:show={showAddToKnowledgeModal}
+				noteId={selectedNote.id}
+			/>
+		{/if}
+
 		<div class="flex flex-col gap-1 px-1 mt-1.5 mb-3">
 			<div class="flex justify-between items-center">
 				<div class="flex items-center md:self-center text-xl font-medium px-0.5 gap-2 shrink-0">
@@ -550,6 +559,10 @@
 																			);
 																			init();
 																		}}
+																		onAddToKnowledge={() => {
+																			selectedNote = note;
+																			showAddToKnowledgeModal = true;
+																		}}
 																	>
 																		<button
 																			class="self-center w-fit text-sm p-1 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
@@ -619,6 +632,10 @@
 																				await getPinnedNoteList(localStorage.token).catch(() => [])
 																			);
 																			init();
+																		}}
+																		onAddToKnowledge={() => {
+																			selectedNote = note;
+																			showAddToKnowledgeModal = true;
 																		}}
 																	>
 																		<button

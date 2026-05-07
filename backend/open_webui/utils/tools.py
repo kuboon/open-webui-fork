@@ -86,6 +86,7 @@ from open_webui.tools.builtin import (
     list_knowledge,
     view_file,
     view_knowledge_file,
+    add_note_to_knowledge,
     view_skill,
     create_tasks,
     update_task,
@@ -527,6 +528,11 @@ async def get_builtin_tools(
         and await has_user_permission('notes')
     ):
         builtin_functions.extend([search_notes, view_note, write_note, replace_note_content])
+
+        # Allow adding a note's content into a knowledge collection when both
+        # the notes and knowledge categories are enabled.
+        if is_builtin_tool_enabled('knowledge'):
+            builtin_functions.append(add_note_to_knowledge)
 
     # Channels tools - search channels and messages
     if (
